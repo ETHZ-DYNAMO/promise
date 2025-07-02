@@ -8,7 +8,6 @@ endif()
 find_library(ABC_LIB 
   NAMES abc libabc 
   PATHS "${ABC_ROOT}"
-  PATH_SUFFIXES "." "build"
   NO_DEFAULT_PATH
 )
 
@@ -17,11 +16,3 @@ if(NOT ABC_LIB)
 endif()
 
 message(STATUS "Found abc dynamic lib: ${ABC_LIB}")
-
-# Create interface target
-add_library(ABCLib SHARED IMPORTED)
-
-set_target_properties(ABCLib PROPERTIES
-  IMPORTED_LOCATION "${ABC_LIB}"
-)
-

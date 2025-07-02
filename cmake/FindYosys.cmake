@@ -20,15 +20,3 @@ if(NOT YOSYS_LIB)
 endif()
 
 message(STATUS "Found Yosys dynamic lib: ${YOSYS_LIB}")
-
-# Create interface target
-add_library(YosysLib SHARED IMPORTED)
-
-# NOTE: Yosys hard codes the SONAME as $PREFIX/lib/yosys/libyosys.so
-# This hardcoded path is picked up by the compile time linker (ld). If this
-# location doesn't exist during runtime, the application crashes before it
-# searches the LD_LIBRARY_PATH
-set_target_properties(YosysLib PROPERTIES
-  IMPORTED_LOCATION "${YOSYS_LIB}"
-)
-

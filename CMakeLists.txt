@@ -1,8 +1,6 @@
 # General configurations
 cmake_minimum_required(VERSION 3.13)
 
-# Set policy CMP0167 to NEW to suppress FindBoost warning
-cmake_policy(SET CMP0167 NEW)
 project(Promise)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,7 +13,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(cmake/FindYosys.cmake)
 include(cmake/FindABC.cmake)
 
-# Those are the default versions on Ubuntu 22.04
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(Boost 1.82 REQUIRED COMPONENTS filesystem system graph json)
 
@@ -59,8 +56,8 @@ function(add_promise_binary binary_name)
         PRIVATE
 
         Promise
-        YosysLib
-        ABCLib
+        ${YOSYS_LIB}
+        ${ABC_LIB}
         Eigen3::Eigen
         Boost::json
     )

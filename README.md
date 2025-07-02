@@ -6,15 +6,37 @@ circuits. Promise relies on the technique described
 to generate invariants from simulation traces to aid existing sequential
 synthesis algorithms and remove redundant FFs.
 
+## Table of Contents
+
+- [Getting Started](#getting-started)
+- [Using Promise](#using-promise)
+- [License Notice](#license-notice)
+
 ## Getting Started
+
+This section describes how to build Promise.
+
+### Recommended: Using the Provided Dockerfile
+
+For convenience, we provide a Dockerfile, you can build the Docker image as follows:
+
+```
+$ docker build -t promise-image . # builds the image
+$ docker run -it -u promise-image /bin/bash # launches the image
+```
 
 ### Installing Dependencies
 
 ```
-$ sudo apt-get -y \
-  build-essential git gtest clang help2man \
-  libeigen3-dev ninja-build
+$ sudo apt-get install -y \
+  build-essential git libgtest-dev \
+  libeigen3-dev ninja-build cmake libboost-dev \
+  lld bison flex libreadline-dev gawk tcl-dev libffi-dev \
+  graphviz xdot pkg-config python3 zlib1g-dev \
+  help2man perl make curl python3-venv python3-pip autoconf
 ```
+
+The default version of boost is too old (Promise needs at least 1.82); you can get it from the [official boost website](https://www.boost.org/releases/1.82.0/).
 
 This project can optionally use `rIC3`. Which requires a [rust
 compiler](https://www.rust-lang.org/tools/install). `rIC3` uses some unstable rust features. Therefore, we need to enable the nightly version:
@@ -26,8 +48,14 @@ $ rustup override set nightly
 
 ### Building the Project
 
+Clone Promise from GitHub and all its submodules:
 ```
-$ bash build.sh
+$ git clone --recurse-submodules git@github.com:ETHZ-DYNAMO/promise.git
+```
+
+Build Promise:
+```
+$ cd promise && bash build.sh
 ```
 
 ### Testing
@@ -38,15 +66,13 @@ $ cd build
 $ ninja test
 ```
 
-## Running Promise
-
+## Using Promise
 
 ```
-$ build/bin/promise <top_name> <src1.v>,<src2.v>,<src3.v>
+$ build/bin/promise <top_name> <src1.v> <src2.v> <src3.v> ...
 ```
 
-
-## Running the IWLS/ICCAD '25 Experiments
+### Running the IWLS/ICCAD '25 Experiments
 
 Please refer to the description in `experiments/iccad25-promise`.
 

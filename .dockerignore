@@ -1,0 +1,12 @@
+/build/
+output/
+abc.history
+*.pdf
+*.xlsx
+/.cache/
+/.github/
+/experiments/test-*/
+libabc.a
+*.o
+*.d
+/ext/yosys/install

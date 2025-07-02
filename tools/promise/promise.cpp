@@ -34,16 +34,16 @@ USING_YOSYS_NAMESPACE
 
 int main(int argc, char *argv[]) {
   Timer t("total");
-  if (argc != 3) {
+  if (argc < 3) {
     std::cerr << "Usage: " << argv[0]
-              << "<top_module_name> <verilog_file1>,<verilog_file2>,...\n";
+              << "<top_module_name> <verilog_file1> <verilog_file2> ...\n";
     return 1;
   }
 
   std::string topName = argv[1];
   std::string inFileNames = argv[2];
 
-  std::vector<std::string> verilogFiles = split(inFileNames, ',');
+  std::vector<std::string> verilogFiles(argv + 2, argv + argc);
 
   runVerilatorLinting(verilogFiles, topName);
 
