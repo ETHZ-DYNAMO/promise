@@ -29,7 +29,6 @@ using Vertex_size_t = boost::graph_traits<Graph>::vertices_size_type;
 using vertex_index_map =
     boost::property_map<Graph, boost::vertex_index_t>::const_type;
 
-
 std::vector<Invariant>
 inferLinearEqualities(RTLIL::Module *module, const Eigen::MatrixXi &matrix,
                       const std::vector<RTLIL::IdString> &signals) {
@@ -163,30 +162,57 @@ getMutexSignalsViaCliqueEnumeration(const Graph &signalConflictGraph) {
   return cliques;
 }
 
+std::pair<Eigen::MatrixXi, std::vector<IdString>>
+pickSingleBitSignals(Module *module, const Eigen::MatrixXi &mat,
+                     const std::vector<IdString> &signalList) {
+
+  assert(mat.cols() == signalList.size());
+  std::vector<size_t> indices;
+
+  std::vector<IdString> newSignals;
+
+  for (size_t i = 0; i < signalList.size(); ++i) {
+    if (module->wire(signalList[i])->width == 1) {
+      indices.push_back(i);
+      newSignals.push_back(signalList[i]);
+    }
+  }
+  Eigen::MatrixXi newMatrix(mat.rows(), indices.size());
+
+  for (size_t i = 0; i < indices.size(); ++i) {
+    newMatrix.col(i) = mat.col(indices[i]);
+  }
+  assert(newMatrix.cols() == newSignals.size());
+  return std::make_pair(newMatrix, newSignals);
+}
+
 std::vector<Invariant> inferLinearInequalitiesViaConflictGraph(
     RTLIL::Module *module, const Eigen::MatrixXi &matrix,
     const std::vector<RTLIL::IdString> &signals) {
+
+  auto [singleBitMatrix, singleBitSignals] =
+      pickSingleBitSignals(module, matrix, signals);
 
   if (static_cast<std::size_t>(matrix.cols()) != signals.size()) {
     throw std::runtime_error("The number of columns do not match the signals");
   }
 
   // We add one node for each signal and its completment
-  size_t offset = signals.size();
+  size_t offset = singleBitSignals.size();
   Graph signalConflictGraph(offset * 2);
 
-  // Append the signals with their complements
+  // Append the singleBitSignals with their complements
 
   using WireWithIsNegatedType = std::pair<IdString, /*isNegated=*/bool>;
 
   std::vector<WireWithIsNegatedType> sigNameWithIsNegated;
-  sigNameWithIsNegated.reserve(signals.size() * 2);
+  sigNameWithIsNegated.reserve(singleBitSignals.size() * 2);
 
-  for (const auto &sig : signals) {
+  for (const auto &sig : singleBitSignals) {
     assert(module->wire(sig) && module->wire(sig)->width == 1);
     sigNameWithIsNegated.emplace_back(sig, false);
   }
-  for (const auto &sig : signals) {
+  for (const auto &sig : singleBitSignals) {
     sigNameWithIsNegated.emplace_back(sig, true);
   }
 
@@ -196,11 +222,11 @@ std::vector<Invariant> inferLinearInequalitiesViaConflictGraph(
     boost::add_edge(i, i + offset, signalConflictGraph);
   }
 
-  Eigen::MatrixXi matrixConcat(matrix.rows(), offset * 2);
+  Eigen::MatrixXi matrixConcat(singleBitMatrix.rows(), offset * 2);
 
-  auto matrixNegate = 1 - matrix.array();
+  auto matrixNegate = 1 - singleBitMatrix.array();
 
-  matrixConcat << matrix, matrixNegate;
+  matrixConcat << singleBitMatrix, matrixNegate;
 
   for (size_t sigI = 0; sigI < 2 * offset; ++sigI) {
     for (size_t sigJ = sigI + 1; sigJ < 2 * offset; ++sigJ) {

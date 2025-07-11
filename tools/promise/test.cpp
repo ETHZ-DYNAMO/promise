@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   Timer t("total");
   if (argc < 3) {
     std::cerr << "Usage: " << argv[0]
-              << "<top_module_name> <verilog_file1> <verilog_file2> ...\n";
+              << " <top_module_name> <verilog_file1> <verilog_file2> ...\n";
     return 1;
   }
 
@@ -44,6 +44,8 @@ int main(int argc, char *argv[]) {
   std::string inFileNames = argv[2];
 
   std::vector<std::string> verilogFiles(argv + 2, argv + argc);
+
+  // runVerilatorLinting(verilogFiles, topName);
 
   for (auto &f : verilogFiles) {
     if (!fs::exists(f)) {
@@ -56,7 +58,7 @@ int main(int argc, char *argv[]) {
 
   RTLIL::Design *design = new RTLIL::Design;
 
-// #define PROMISE_LOG
+#define PROMISE_LOG
 #ifdef PROMISE_LOG
   // Enables Yosys pass outputs
   Yosys::log_streams.push_back(&std::cout);
@@ -68,7 +70,7 @@ int main(int argc, char *argv[]) {
 
   SynthesisFlowConfig config(3600, "output");
 
-  synthFlowSingleOutputReg(config, design, topName);
+  synthFlowManual(config, design, topName);
 
   delete design;
   yosys_shutdown();

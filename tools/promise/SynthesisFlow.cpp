@@ -3,12 +3,15 @@
 #include "promise/AbcCommands.h"
 #include "promise/Invariants.h"
 #include "promise/ModelCheckingResult.h"
+#include "promise/ShellUtils.h"
+
 #include "promise/RTLIL/EncodingOptimization.h"
 #include "promise/RTLIL/EquipInvariants.h"
 #include "promise/RTLIL/RTLILUtils.h"
-#include "promise/ShellUtils.h"
+
 #include "promise/Simulation/VcdParser.h"
 #include "promise/Simulation/VerilatorUtils.h"
+
 #include "promise/Timer.h"
 
 #include "kernel/rtlil.h"
@@ -17,7 +20,93 @@
 #include "SynthesisFlow.h"
 #include <Eigen/src/Core/Matrix.h>
 #include <iostream>
+#include <kernel/ff.h>
+#include <kernel/ffinit.h>
+#include <kernel/sigtools.h>
 #include <tuple>
+#include <utility>
+
+/// \brief: A helper class for selecting signals to be analyzed to produce
+/// invariants
+struct SignalList {
+  std::vector<IdString> signals;
+  RTLIL::Module *module;
+  SignalList(Module *m) : module(m) { SigMap map(m); }
+
+  /// \brief: Add the name newSig to the list of the signals if there is no
+  /// duplicated signals.
+  ///
+  /// \note: assert false if the IdString does not correspond to a wire in the
+  /// module
+  void addSignal(const IdString &newSig) {
+    std::string sigName = log_id(newSig);
+    if (sigName[0] == '$') {
+      return;
+    }
+
+    if (sigName.find("clk") != std::string::npos ||
+        sigName.find("rst") != std::string::npos ||
+        sigName.find("CLK") != std::string::npos ||
+        sigName.find("RST") != std::string::npos) {
+      return;
+    }
+
+    assert(module->wire(newSig) &&
+           "Attempting to add a signal by name that is not a wire!");
+    // The signal is unique
+    if (std::all_of(
+            signals.begin(), signals.end(), [newSig, this](const IdString &id) {
+              return SigSpec(module->wire(newSig)) != SigSpec(module->wire(id));
+            })) {
+      signals.push_back(newSig);
+    }
+  }
+
+  void addBscRdyEnSignals() {
+    for (auto *wire : module->wires()) {
+      std::string strName = log_id(wire->name);
+      if ((strName.find("EN_") != std::string::npos ||
+           strName.find("RDY_") != std::string::npos ||
+           strName.find("ENC") != std::string::npos ||
+           strName.find("DEC") != std::string::npos) &&
+          !wire->port_input) {
+        assert(wire->width == 1);
+        addSignal(wire->name);
+      }
+    }
+  }
+
+  void addSingleBitRegOuts() {
+    for (auto *wire : getRegOutputs(module)) {
+      if (wire->width == 1) {
+        auto *ffCell = getDriverCell(module, wire);
+        assert(checkFFInitialized(module, ffCell));
+        addSignal(wire->name);
+      }
+    }
+  }
+
+  void addSingleBitSignals() {
+    for (auto *wire : module->wires()) {
+      if (wire->width == 1) {
+        addSignal(wire->name);
+      }
+    }
+  }
+
+  /// \brief: This adds all the signals marked with (* promise *) to the list of
+  /// signals to derive invariants.
+  void addSignalsMarkedWithPromise() {
+    for (auto *wire : module->wires()) {
+      if (wire->has_attribute(RTLIL::escape_id("promise"))) {
+        addSignal(wire->name);
+      }
+    }
+  }
+
+private:
+  SigMap map;
+};
 
 // Compressing the unique rows from a vector of matrices into one matrix
 Eigen::MatrixXi getUniqueRows(const vector<Eigen::MatrixXi> &matrices) {
@@ -58,6 +147,11 @@ Eigen::MatrixXi getUniqueRows(const vector<Eigen::MatrixXi> &matrices) {
 ModelCheckingResult verifyInvariant(const SynthesisFlowConfig &config,
                                     RTLIL::Module *m,
                                     const std::vector<Invariant> &invariants) {
+  if (invariants.empty()) {
+    std::cerr
+        << "Warning - verifying a set of empty invariants! Returning SAFE\n";
+    return ModelCheckingResult::trivialInvariant();
+  }
 
   RTLIL::Design *design = new RTLIL::Design;
 
@@ -71,6 +165,8 @@ ModelCheckingResult verifyInvariant(const SynthesisFlowConfig &config,
   instrumentInvariants(cloned, invariants,
                        /* trimOriginalOutputs = */ true,
                        /* separateInvariants = */ false);
+
+  design->rename(cloned, RTLIL::escape_id("to_verify"));
 
   auto miterVerilog = config.getCurrentProofDir() / "to_verify.v";
   run_pass("opt_clean; write_verilog " + miterVerilog.string(), design);
@@ -91,11 +187,28 @@ ModelCheckingResult verifyInvariant(const SynthesisFlowConfig &config,
       ModelCheckingResult::parserIC3LogFile(m, pdrLogFile);
 #endif
 
+#if 0
+  // This is used to debug the testbench for counterexample
+  if (result.status == ModelCheckingResult::UNSAFE) {
+    auto cexTbFile = config.getCurrentDebugDir() / VERILATOR_TB_NAME;
+    auto vcdFile = config.getCurrentDebugDir() / SIM_WAVEFORM;
+    auto verilatorObjDir = config.getCurrentDebugDir() / VERILATOR_OBJ_DIR_NAME;
+    auto testbenchFile = config.getCurrentDebugDir() / VERILATOR_TB_NAME;
+
+    createCexTestBench(cexTbFile, cloned, result, vcdFile);
+    buildVerilatorModel(verilatorObjDir, {miterVerilog}, testbenchFile,
+                        "to_verify");
+    std::stringstream simCmd;
+    simCmd << (verilatorObjDir / ("Vto_verify"));
+    shell(simCmd.str());
+  }
+#endif // if 0
+
   delete design;
   return result;
 }
 
-void flowComb(const SynthesisFlowConfig &config, RTLIL::Module *m) {
+void flowComb(const SynthesisFlowConfig &config, const RTLIL::Module *m) {
   RTLIL::Design *design = new RTLIL::Design;
 
   // Clone the design
@@ -110,6 +223,33 @@ void flowComb(const SynthesisFlowConfig &config, RTLIL::Module *m) {
       config.getSynthResultDir() / "combinational.blif";
 
   runAbcCombOptimization(initialBlif, combinationalBaseline);
+}
+
+// Technique: Comb
+void flowScorr(const SynthesisFlowConfig &config, RTLIL::Module *m,
+               unsigned inductionDepth) {
+  RTLIL::Design *design = new RTLIL::Design;
+  RTLIL::Module *cloned = m->clone();
+  design->add(cloned);
+  run_pass("techmap; write_blif /tmp/initial.blif", design);
+
+  unsigned numPOBits = 0;
+  int maxPortId = -1;
+  for (Wire *identifier : cloned->wires()) {
+    if (identifier->port_output) {
+      numPOBits += identifier->width;
+      maxPortId =
+          maxPortId < identifier->port_id ? identifier->port_id : maxPortId;
+    }
+  }
+
+  runAbcScorrOptimization("/tmp/initial.blif",
+                          config.getSynthResultDir() / "scorr.blif",
+                          /* inductionDepth */ inductionDepth,
+                          /* withInvariants */ false, numPOBits);
+  std::cerr << "[RESULT] after Scorr: ";
+  SynthResultLUT6(config.getSynthResultDir() / "scorr.blif")
+      .logResult(std::cerr);
 }
 
 // Assuming that the conjunction of the invariants is proven, use scorr in ABC
@@ -153,6 +293,10 @@ void flowScorrInvar(const SynthesisFlowConfig &config, RTLIL::Module *m,
 
   runAbcScorrOptimization(miterBlif, optimizedBlif, /* inductionDepth */ 10,
                           /* withInvariants */ true, numPOBits);
+
+  auto result = SynthResultLUT6(optimizedBlif);
+  std::cerr << "[RESULT] after Scorr + Invar: ";
+  result.logResult(std::cerr);
 }
 
 void flowEncoding(const SynthesisFlowConfig &config, RTLIL::Module *m,
@@ -182,13 +326,15 @@ void flowEncoding(const SynthesisFlowConfig &config, RTLIL::Module *m,
   run_pass("techmap; write_blif " + outputBlif.string(), design);
 
   runSequentialEquivalenceChecking(originalBlif, outputBlif, 3600);
+
+  std::cerr << "[RESULT] after Scorr + Encoding: ";
+  SynthResultLUT6(outputBlif).logResult(std::cerr);
 }
 
-Eigen::MatrixXi
-runRandomSimulation(RTLIL::Module *m, const std::string &topName,
-                    SynthesisFlowConfig &config,
-                    const std::filesystem::path &flattenedVerilog,
-                    const std::vector<RTLIL::IdString> &signalList) {
+Eigen::MatrixXi runRandomSimulation(
+    RTLIL::Module *m, const std::string &topName, SynthesisFlowConfig &config,
+    const std::filesystem::path &flattenedVerilog,
+    const std::vector<RTLIL::IdString> &signalList, const unsigned simCycles) {
   // [STEP]: Simulate the design:
   std::vector<Eigen::MatrixXi> simData;
   for (unsigned i = 0; i < 4; i++, config.newSimIteration()) {
@@ -199,7 +345,7 @@ runRandomSimulation(RTLIL::Module *m, const std::string &topName,
     auto vcdFile = config.getCurrentSimDir() / SIM_WAVEFORM;
 
     // Compile the design into a simulation model:
-    createRandomTestBench(testbenchFile, m, 2500, vcdFile, i);
+    createRandomTestBench(testbenchFile, m, simCycles, vcdFile, i);
 
     buildVerilatorModel(verilatorSimObjDir, {flattenedVerilog}, testbenchFile,
                         topName);
@@ -255,7 +401,12 @@ std::vector<Invariant> inferLinearInvariantsFromSimulation(
 
     // Retrieve the signal matrix from CEX
     auto cexMatrix = vcdToSignalMatrix(m, vcdFile, signalList);
+    assert(cexMatrix.rows() > 0 && "Empty CEX!");
+    unsigned rowsBefore = signalMatrix.rows();
+    std::cerr << "Rows before :" << signalMatrix.rows() << "\n";
     signalMatrix = getUniqueRows({signalMatrix, cexMatrix});
+    std::cerr << "Rows after :" << signalMatrix.rows() << "\n";
+    assert(signalMatrix.rows() > rowsBefore);
 
     // [STEP]: Suggest invariants from the signalMatrix:
     linearInvariants = inferLinearEqualities(m, signalMatrix, signalList);
@@ -263,6 +414,11 @@ std::vector<Invariant> inferLinearInvariantsFromSimulation(
         inferLinearInequalitiesViaConflictGraph(m, signalMatrix, signalList);
     std::copy(linearInequalities.begin(), linearInequalities.end(),
               std::back_inserter(linearInvariants));
+
+    std::cerr << "[INFO] <==== Attempting to verify invariants: ====> \n";
+    for (const auto &inv : linearInvariants) {
+      std::cerr << "[INFO] invariant: " << inv.toString() << "\n";
+    }
 
     modelCheckingResult = verifyInvariant(config, m, linearInvariants);
 
@@ -274,33 +430,32 @@ std::vector<Invariant> inferLinearInvariantsFromSimulation(
 }
 
 // This is the "suggest" and "guarnatee" step
-bool synthesisFlow(SynthesisFlowConfig config, RTLIL::Design *design,
-                   const std::string &topName) {
+bool synthFlowSingleOutputReg(SynthesisFlowConfig config, RTLIL::Design *design,
+                              const std::string &topName) {
 
   RTLIL::Module *m = design->module(RTLIL::escape_id(topName));
 
+  run_pass("synth -nofsm -flatten -top " + topName +
+               "; dffunmap; check -assert",
+           design);
+
   run_pass("clean", design);
+
+  auto flattenedVerilog = config.getOutputDir() / VERILOG_FLATTENED;
+  run_pass("write_verilog -norename " + flattenedVerilog.string(), design);
+
+  // Check if all the FFs are initialized
 
   flowComb(config, m);
 
-  auto regOuts = getRegOutputs(m);
-
-  // [STEP]: retrieve single-bit register output signals.
-  std::vector<RTLIL::IdString> singleBitRegOuts;
-  for (auto *sig : regOuts) {
-    if (sig->width == 1) {
-      singleBitRegOuts.push_back(sig->name);
-    }
-  }
-
-  auto flattenedVerilog = config.getOutputDir() / VERILOG_FLATTENED;
-  run_pass("write_verilog " + flattenedVerilog.string(), design);
+  SignalList sigList(m);
+  sigList.addSingleBitRegOuts();
 
   auto signalMatrix = runRandomSimulation(m, topName, config, flattenedVerilog,
-                                          singleBitRegOuts);
+                                          sigList.signals, 3);
 
   auto linearInvariants = inferLinearInvariantsFromSimulation(
-      m, config, signalMatrix, singleBitRegOuts, flattenedVerilog, topName);
+      m, config, signalMatrix, sigList.signals, flattenedVerilog, topName);
 
   std::cerr << "[INFO] List of proven invariants:\n";
   for (const auto &inv : linearInvariants) {
@@ -310,5 +465,50 @@ bool synthesisFlow(SynthesisFlowConfig config, RTLIL::Design *design,
   flowScorrInvar(config, m, linearInvariants);
 
   flowEncoding(config, m, linearInvariants);
+  return true;
+}
+
+// This is the "suggest" and "guarnatee" step
+bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
+                     const std::string &topName) {
+
+  RTLIL::Module *m = design->module(RTLIL::escape_id(topName));
+
+  run_pass("synth -nofsm -flatten -top " + topName +
+               "; dffunmap; check -assert",
+           design);
+
+  run_pass("clean", design);
+  run_pass("opt_clean", design);
+
+  flowComb(config, m);
+
+  SignalList sigList(m);
+
+  // sigList.addSignalsMarkedWithPromise();
+  sigList.addSingleBitRegOuts();
+  sigList.addBscRdyEnSignals();
+  // sigList.addSingleBitSignals();
+
+  for (const auto &s : sigList.signals) {
+    std::cerr << "signal to watch: " << log_id(s) << "\n";
+  }
+
+  auto flattenedVerilog = config.getOutputDir() / VERILOG_FLATTENED;
+  run_pass("write_verilog -norename " + flattenedVerilog.string(), design);
+
+  auto signalMatrix = runRandomSimulation(m, topName, config, flattenedVerilog,
+                                          sigList.signals, 25000);
+
+  auto linearInvariants = inferLinearInvariantsFromSimulation(
+      m, config, signalMatrix, sigList.signals, flattenedVerilog, topName);
+
+  std::cerr << "[INFO] <==== List of proven invariants: ====> \n";
+  for (const auto &inv : linearInvariants) {
+    std::cerr << "[INFO] invariant: " << inv.toString() << "\n";
+  }
+
+  flowScorr(config, m, 10);
+  flowScorrInvar(config, m, linearInvariants);
   return true;
 }

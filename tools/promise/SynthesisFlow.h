@@ -46,6 +46,14 @@ public:
     return dirName;
   }
 
+  // Get the path to the directory to write temporary verification data:
+  std::filesystem::path getCurrentDebugDir() const {
+    auto dirName =
+        outputDir / ("verif_round_" + std::to_string(proofIteration)) / "debug";
+    mkdir(dirName);
+    return dirName;
+  }
+
   std::filesystem::path getSynthResultDir() const {
     auto dirName = outputDir / ("synthesis_result");
     mkdir(dirName);
@@ -67,5 +75,8 @@ public:
   void newSimIteration() { simIteration += 1; }
 };
 
-bool synthesisFlow(SynthesisFlowConfig config, RTLIL::Design *design,
-                   const std::string &topName);
+bool synthFlowSingleOutputReg(SynthesisFlowConfig config, RTLIL::Design *design,
+                              const std::string &topName);
+
+bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
+                     const std::string &topName);

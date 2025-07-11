@@ -3,6 +3,7 @@
 // START: Symbols from libabc.so
 #include "base/main/mainInt.h"
 #include "promise/StringUtils.h"
+#include <filesystem>
 #include <iostream>
 #include <ostream>
 #include <stdexcept>
@@ -84,7 +85,7 @@ struct SynthResult {
 };
 
 struct SynthResultAig : public SynthResult {
-  SynthResultAig(Abc_Frame_t *pAbc) {
+  void extractData(Abc_Frame_t *pAbc) {
     // Make a copy of the current network (so "st" won't do anything in
     // place)
     Abc_Ntk_t *pCopy = Abc_NtkDup(Abc_FrameReadNtk(pAbc));
@@ -97,10 +98,32 @@ struct SynthResultAig : public SynthResult {
     // Recover the copy
     Abc_FrameSetCurrentNetwork(pAbc, pCopy);
   }
+
+  SynthResultAig(Abc_Frame_t *pAbc) { extractData(pAbc); }
+
+  SynthResultAig(const std::filesystem::path &blifPath) {
+
+    assert(blifPath.string().find(".blif") != std::string::npos);
+
+    Abc_Start();
+    Abc_Frame_t *pAbc;
+    pAbc = Abc_FrameGetGlobalFrame();
+    runAbcCommand(pAbc, "read_blif " + blifPath.string());
+    extractData(pAbc);
+    Abc_Stop();
+  }
+
+  void logResult(std::ostream &os) {
+    os << "AIG result: ";
+    os << " nodes: " << nodes;
+    os << " ffs: " << ffs;
+    os << " levels: " << levels;
+    os << "\n";
+  }
 };
 
 struct SynthResultLUT6 : public SynthResult {
-  SynthResultLUT6(Abc_Frame_t *pAbc) {
+  void extractData(Abc_Frame_t *pAbc) {
     // Make a copy of the current network (so "if -K 6" won't do anything in
     // place)
     Abc_Ntk_t *pCopy = Abc_NtkDup(Abc_FrameReadNtk(pAbc));
@@ -112,5 +135,27 @@ struct SynthResultLUT6 : public SynthResult {
     levels = Abc_NtkLevel(ntk);
     // Recover the copy
     Abc_FrameSetCurrentNetwork(pAbc, pCopy);
+  }
+
+  SynthResultLUT6(Abc_Frame_t *pAbc) { extractData(pAbc); }
+
+  SynthResultLUT6(const std::filesystem::path &blifPath) {
+
+    assert(blifPath.string().find(".blif") != std::string::npos);
+
+    Abc_Start();
+    Abc_Frame_t *pAbc;
+    pAbc = Abc_FrameGetGlobalFrame();
+    runAbcCommand(pAbc, "read_blif " + blifPath.string());
+    extractData(pAbc);
+    Abc_Stop();
+  }
+
+  void logResult(std::ostream &os) {
+    os << "LUT6 result: ";
+    os << " nodes: " << nodes;
+    os << " ffs: " << ffs;
+    os << " levels: " << levels;
+    os << "\n";
   }
 };

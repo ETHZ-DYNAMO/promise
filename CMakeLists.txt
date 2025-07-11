@@ -30,10 +30,10 @@ endif()
 enable_testing()
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
-include_directories(${YOSYS_ROOT})
-include_directories(${EIGEN3_INCLUDE_DIR})
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${ABC_ROOT}/src)
+include_directories(SYSTEM ${YOSYS_ROOT})
+include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR})
+include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+include_directories(SYSTEM ${ABC_ROOT}/src)
 
 add_library(Promise)
 
