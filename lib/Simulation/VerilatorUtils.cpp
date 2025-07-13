@@ -1,5 +1,7 @@
+#include <boost/dynamic_bitset_fwd.hpp>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <stdexcept>
 
 #include "promise/ModelCheckingResult.h"
@@ -12,6 +14,43 @@
 #include "kernel/rtlil.h"
 
 using namespace Yosys;
+
+/// \brief: Dumps the bitset to the output stream with MSB -> LSB
+void dumpBitSetMSBOrder(const boost::dynamic_bitset<> &bits, std::ostream &os) {
+  os << "0b";
+  for (int pos = bits.size() - 1; pos >= 0; --pos)
+    os << bits[pos];
+}
+
+void dumpSlice(const boost::dynamic_bitset<> &bits, std::ostream &os,
+               size_t msb, size_t lsb) {
+  assert(msb >= lsb);
+  assert(msb <= bits.size() - 1);
+  os << "0b";
+  for (int i = msb; i >= (int)lsb; --i) {
+    os << bits[i];
+  }
+}
+
+/// \example: If there are 65 bits, then there are 3 chunks {32, 32, 1}
+///
+/// \note: Suppose the number of 128 bit wide, then the assignment is read as
+/// follows: {bits_0_to_31, bits_32_to_63, bits_64_to_95, bits_95_to_127}
+void dumpVerilatorWideNumberAssignment(const boost::dynamic_bitset<> &bits,
+                                       std::ostream &os,
+                                       const std::string &symbolName) {
+
+  int chunks = (bits.size() / 32) + ((bits.size() % 32) > 0);
+  for (int i = 0; i < chunks; i++) {
+    os << symbolName << "[" << i << "] = ";
+    size_t lsb = 32 * i;
+    size_t msb = min(32 * (i + 1) - 1, (int)bits.size() - 1);
+    assert((1 + msb - lsb) <= 32);
+    assert((!(i < chunks - 1)) || (msb - lsb + 1 == 32));
+    dumpSlice(bits, os, msb, lsb);
+    os << ";\n";
+  }
+}
 
 // Create a Verilator testbench feed with random inputs
 void createRandomTestBench(const std::filesystem::path &pathToVerilatorTb,
@@ -85,9 +124,18 @@ void createRandomTestBench(const std::filesystem::path &pathToVerilatorTb,
   for (auto *inputSig : module->wires()) {
     if (inputSig->port_input && log_id(inputSig) != clk &&
         log_id(inputSig) != rst) {
-      size_t mask = (1 << inputSig->width) - 1;
-      os << "      top->" << log_id(inputSig) << " = randomEngine() & 0x"
-         << std::hex << mask << ";\n";
+
+      if (inputSig->width <= 32) {
+        size_t mask = (1 << inputSig->width) - 1;
+        os << "      top->" << log_id(inputSig) << " = randomEngine() & 0x"
+           << std::hex << mask << ";\n";
+      } else {
+        for (int i = 0;
+             i < (inputSig->width / 32) + (inputSig->width % 32 != 0); ++i) {
+          os << "      top->" << log_id(inputSig) << "[" << i
+             << "]  = randomEngine();\n";
+        }
+      }
     }
   }
   os << "    }\n";
@@ -164,14 +212,16 @@ void createCexTestBench(const std::filesystem::path &pathToVerilatorTb,
     for (const auto &inputSig : inputWires) {
       assert(inputSig->port_input);
       if (log_id(inputSig) != clk) {
-        assert(i < cex.inputValues.at(inputSig->name).size());
-        long long mask = ((long long)1 << inputSig->width) - 1;
-        os << "  // decimal of width: " << inputSig->width << "\n";
-        os << "  // decimal of mask: " << mask << "\n";
-        os << "  top->" << log_id(inputSig) << " = "
-           << cex.inputValues.at(inputSig->name)[i] << " & 0x" << std::hex
-           << mask << ";\n"
-           << std::dec;
+        auto val = cex.inputValues.at(inputSig->name)[i];
+        std::string symbolName = std::string("top->") + log_id(inputSig);
+        if (inputSig->width <= 32) {
+          assert(i < cex.inputValues.at(inputSig->name).size());
+          os << "  " << symbolName << " = ";
+          dumpBitSetMSBOrder(val, os);
+          os << ";\n";
+        } else {
+          dumpVerilatorWideNumberAssignment(val, os, symbolName);
+        }
       }
     }
     os << "  top->eval();\n";
@@ -237,7 +287,7 @@ void buildVerilatorModel(const std::filesystem::path &objDir,
 
   // Compile the CPP simulation model
   std::stringstream makeCmd;
-  makeCmd << "make -C " << objDir;
+  makeCmd << "make -j8 -C " << objDir;
   makeCmd << " -f V" << topName + ".mk";
   makeCmd << " V" << topName;
 

@@ -1,6 +1,7 @@
 #include "promise/ModelCheckingResult.h"
 #include "kernel/rtlil.h"
 #include "promise/RTLIL/RTLILUtils.h"
+#include <boost/dynamic_bitset/dynamic_bitset.hpp>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -11,23 +12,34 @@ void expectLine(std::ifstream &is, std::string &line) {
     throw std::runtime_error("Logfile is ill-formed!");
 }
 
+/// \brief convert the input string "bits" to a bitset\
+///
+/// \IMPORTANT: bits[0] is the LSB and bits[bits.size() - 1] is the MSB. This is
+/// the opposite of the built-in initialize dynamic_bitset<>(string)
+boost::dynamic_bitset<> strToBits(std::string bits) {
+  auto bitset = boost::dynamic_bitset<>(bits.size());
+  for (size_t i = 0; i < bits.size(); i++) {
+    bitset[i] = bits[i] == '1';
+  }
+  return bitset;
+}
+
 void dispatchLine(
     const std::string &line, const std::vector<Wire *> &wires,
-    std::map<RTLIL::IdString, std::vector<uint32_t>> &sigToValueMap) {
+    std::map<RTLIL::IdString, std::vector<boost::dynamic_bitset<>>>
+        &sigToValueMap) {
 
   unsigned pos = 0;
 
   for (auto *wire : wires) {
-    assert(
-        wire->width <= 32 &&
-        "Wire with more than 32 bits is not yet properly handled in promise!");
     auto substrWire = line.substr(pos, wire->width);
     // Yosys dump input the blif in increasing indices, e.g.,
     // arr[0] arr[1] arr[2] ...
     // To recover the HEX value, we need to reverse it:
-    std::reverse(substrWire.begin(), substrWire.end());
-    sigToValueMap[wire->name].push_back(
-        static_cast<uint32_t>(std::stoul(substrWire, nullptr, 2)));
+    // std::reverse(substrWire.begin(), substrWire.end());
+    auto bitset = strToBits(substrWire);
+
+    sigToValueMap[wire->name].push_back(bitset);
     pos += wire->width;
   }
   assert(pos == line.size());

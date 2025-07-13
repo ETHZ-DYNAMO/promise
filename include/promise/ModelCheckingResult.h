@@ -2,6 +2,7 @@
 
 #include "promise/StringUtils.h"
 
+#include <boost/dynamic_bitset/dynamic_bitset.hpp>
 #include <boost/graph/sequential_vertex_coloring.hpp>
 
 #include <Eigen/Dense>
@@ -47,7 +48,11 @@ struct ModelCheckingResult {
   /// \brief The values of the signals at each state in the counterexample.
   /// Maps each signal to the value to be applied at each state
   /// e.g., IdString(rst), {1, 0, 0, 0, ...}
-  std::map<RTLIL::IdString, std::vector<uint32_t>> inputValues;
+  ///
+  /// \note: please note that, to print the bitset as a regular integer, we need
+  /// to reverse it (otherwise, the left-most bit will be the LSB instead of the
+  /// MSB).
+  std::map<RTLIL::IdString, std::vector<boost::dynamic_bitset<>>> inputValues;
 
   /// \brief Number of states in CEX
   unsigned numCexStates = 0;
@@ -78,4 +83,11 @@ struct ModelCheckingResult {
   /// signals to the RTL module
   static ModelCheckingResult parserIC3LogFile(RTLIL::Module *module,
                                               const std::string &logFile);
+
+  static ModelCheckingResult trivialInvariant() {
+
+    ModelCheckingResult result;
+    result.status = SAFE;
+    return result;
+  }
 };
