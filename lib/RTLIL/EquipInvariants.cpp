@@ -130,6 +130,11 @@ void instrumentInvariants(RTLIL::Module *m,
     }
   }
 
+  if (invariants.empty()) {
+    std::cerr << "Warning - instrumenting an empty invariant (i.e., trivially true)!\n";
+    invPins.append(RTLIL::Const(1));
+  }
+
   if (separateInvariants) {
     RTLIL::Wire *propertyPin =
         m->addWire(RTLIL::escape_id("property_pin"), invPins.size());
