@@ -17,8 +17,10 @@ inline std::vector<Wire *> getRegOutputs(RTLIL::Module *m) {
   // std::set<RTLIL::SigBit> clockedBits;
   std::vector<RTLIL::Wire *> regOuts;
   for (auto *cell : m->cells()) {
+    if (!RTLIL::builtin_ff_cell_types().count(cell->type))
+      continue;
     // TODO: filter more unhandled FF types
-    assert(!cell->type.in("$dff") && "Unhandled cell type that is a FF");
+    assert(cell->type.in("$_DFF_P_") && "Unhandled cell type that is a FF");
     if (cell->type.in("$_DFF_P_")) {
       log("  Found DFF-type cell: %s of type %s\n", log_id(cell),
           log_id(cell->type));
@@ -67,3 +69,7 @@ inline std::vector<Wire *> getSortedInput(Module *module) {
             [](Wire *a, Wire *b) { return a->port_id < b->port_id; });
   return inputs;
 }
+
+/// \brief: This function checks if all the FFs in a given RTLIL module are
+/// intitialized.
+bool checkFFInitialized(Module *module, Cell *ff);
