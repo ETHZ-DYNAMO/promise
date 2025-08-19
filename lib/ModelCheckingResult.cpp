@@ -97,7 +97,6 @@ ModelCheckingResult::parseAbcLogFile(RTLIL::Module *module,
 
   unsigned numInputBits = 0;
   for (const auto &s : inputWires) {
-    assert(s->width <= 32);
     numInputBits += s->width;
   }
 
