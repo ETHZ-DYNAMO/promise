@@ -133,7 +133,7 @@ struct CompatibleSignalsCollector {
   }
 
   CompatibleSignalsCollector(std::vector<CompatibleNodes> &cliques)
-      : cliques(cliques){};
+      : cliques(cliques) {};
 };
 
 std::vector<CompatibleNodes>

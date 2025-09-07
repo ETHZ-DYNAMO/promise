@@ -4,9 +4,9 @@ PRIVATE
   ModelCheckingResult.cpp
   Invariants.cpp
   AbcCommands.cpp
-  Simulation/VcdParser.cpp
-  Simulation/VerilatorUtils.cpp
   RTLIL/RTLILUtils.cpp
   RTLIL/EquipInvariants.cpp
   RTLIL/EncodingOptimization.cpp
 )
+
+add_subdirectory(Simulation)
