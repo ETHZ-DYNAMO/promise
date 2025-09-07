@@ -97,9 +97,30 @@ struct SignalList {
   /// \brief: This adds all the signals marked with (* promise *) to the list of
   /// signals to derive invariants.
   void addSignalsMarkedWithPromise() {
+
+    // We cannot add wires while iterating through the wires
+    std::vector<RTLIL::IdString> wiresToSplit;
+
     for (auto *wire : module->wires()) {
       if (wire->has_attribute(RTLIL::escape_id("promise"))) {
         addSignal(wire->name);
+      }
+      if (wire->has_attribute(RTLIL::escape_id("promise_split_signals"))) {
+        wiresToSplit.push_back(wire->name);
+      }
+    }
+
+    for (const auto &wireToSplit : wiresToSplit) {
+      // For each bit, get SigSpec and extracts a signal
+      Wire *wire = module->wire(wireToSplit);
+      auto sig = RTLIL::SigSpec(wire);
+      for (int i = 0; i < wire->width; i++) {
+        std::string slicedWireName =
+            std::string(log_id(wire->name)) + "_slice_" + std::to_string(i);
+        RTLIL::Wire *bitWire =
+            module->addWire(RTLIL::escape_id(slicedWireName), 1);
+        module->connect(SigSpec(bitWire), SigSpec(wire).extract(i));
+        addSignal(bitWire->name);
       }
     }
   }
@@ -176,7 +197,7 @@ ModelCheckingResult verifyInvariant(const SynthesisFlowConfig &config,
 
   auto pdrLogFile = config.getCurrentProofDir() / "pdr.log";
 
-// #define USING_ABC_PDR
+#define USING_ABC_PDR
 #ifdef USING_ABC_PDR
   runAbcPdrProof(miterBlif, pdrLogFile);
   ModelCheckingResult result =
@@ -187,7 +208,7 @@ ModelCheckingResult verifyInvariant(const SynthesisFlowConfig &config,
       ModelCheckingResult::parserIC3LogFile(m, pdrLogFile);
 #endif
 
-#if 0
+#if 1
   // This is used to debug the testbench for counterexample
   if (result.status == ModelCheckingResult::UNSAFE) {
     auto cexTbFile = config.getCurrentDebugDir() / VERILATOR_TB_NAME;
@@ -442,7 +463,7 @@ bool synthFlowSingleOutputReg(SynthesisFlowConfig config, RTLIL::Design *design,
   run_pass("clean", design);
 
   auto flattenedVerilog = config.getOutputDir() / VERILOG_FLATTENED;
-  run_pass("write_verilog -norename " + flattenedVerilog.string(), design);
+  run_pass("write_verilog " + flattenedVerilog.string(), design);
 
   // Check if all the FFs are initialized
 
@@ -485,17 +506,19 @@ bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
 
   SignalList sigList(m);
 
-  // sigList.addSignalsMarkedWithPromise();
-  sigList.addSingleBitRegOuts();
-  sigList.addBscRdyEnSignals();
+  sigList.addSignalsMarkedWithPromise();
+  // sigList.addSingleBitRegOuts();
+  // sigList.addBscRdyEnSignals();
   // sigList.addSingleBitSignals();
 
   for (const auto &s : sigList.signals) {
     std::cerr << "signal to watch: " << log_id(s) << "\n";
   }
 
+  // assert(false);
+
   auto flattenedVerilog = config.getOutputDir() / VERILOG_FLATTENED;
-  run_pass("write_verilog -norename " + flattenedVerilog.string(), design);
+  run_pass("write_verilog " + flattenedVerilog.string(), design);
 
   auto signalMatrix = runRandomSimulation(m, topName, config, flattenedVerilog,
                                           sigList.signals, 25000);
