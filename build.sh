@@ -36,8 +36,9 @@ build_verilator() {
 
 # Yosys is built by CMake as a subproject (see CMakeLists.txt).
 git -C "$EXT_DIR/yosys" submodule update --init --recursive
-build_abc
+# rIC3 first: its build depends on the Rust toolchain and fails most often.
 build_ric3
+build_abc
 build_verilator
 
 mkdir -p "$PROMISE_CWD/build"
