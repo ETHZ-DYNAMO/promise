@@ -38,6 +38,10 @@ $ sudo apt-get install -y \
 
 The default version of boost is too old (Promise needs at least 1.82); you can get it from the [official boost website](https://www.boost.org/releases/1.82.0/).
 
+Yosys is built as part of Promise with CMake, which requires CMake 3.28 or
+newer. Its SystemVerilog frontend (slang) does not compile with GCC 11; GCC 13
+is tested.
+
 This project can optionally use `rIC3`. Which requires a [rust
 compiler](https://www.rust-lang.org/tools/install). `rIC3` uses some unstable rust features. Therefore, we need to enable the nightly version:
 

@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+# Ubuntu 24.04: CMake 3.28 (required by Yosys) and GCC 13 (slang fails with GCC 11).
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 

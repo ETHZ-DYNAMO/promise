@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    # Ubuntu 24.04 provides CMake 3.28 (required by Yosys) and Boost 1.83
+    # (Promise requires >= 1.82).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out Promise and its submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git ninja-build cmake pkg-config \
+            libeigen3-dev libboost-filesystem-dev libboost-graph-dev \
+            libboost-json-dev libboost-program-options-dev \
+            bison flex libreadline-dev gawk tcl-dev libffi-dev zlib1g-dev \
+            python3 help2man perl autoconf
+
+      # rIC3 uses unstable Rust features.
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup override set nightly
+
+      - name: Build
+        run: bash build.sh
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure

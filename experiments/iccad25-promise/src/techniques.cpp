@@ -52,8 +52,9 @@ int main(int argc, char *argv[]) {
 #define PROMISE_LOG
 #ifdef PROMISE_LOG
   // Enables Yosys pass outputs
-  Yosys::log_streams.push_back(&std::cout);
-  Yosys::log_error_stderr = true;
+  Yosys::logger().add_sink<Yosys::StreamLogSink>(std::cout);
+  // Also print errors (but not warnings) to stderr.
+  Yosys::logger().add_sink<Yosys::StderrLogSink>(/*quiet=*/true);
 #endif
 
   // Run Yosys passes on the design

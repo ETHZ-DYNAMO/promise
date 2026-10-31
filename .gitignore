@@ -30,7 +30,8 @@ yosys_output/
 cosim/
 *.egg-info
 **/sim/
-/build/
+# Build directories (e.g., build/, build-v0.70/).
+/build*/
 /.cache/
 **/obj_dir/
 *.exe
