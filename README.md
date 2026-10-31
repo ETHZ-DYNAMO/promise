@@ -31,7 +31,7 @@ $ docker run -it -u promise-image /bin/bash # launches the image
 $ sudo apt-get install -y \
   build-essential git libgtest-dev \
   libeigen3-dev ninja-build cmake libboost-dev \
-  lld bison flex libreadline-dev gawk tcl-dev libffi-dev \
+  lld bison flex libfl-dev libreadline-dev gawk tcl-dev libffi-dev \
   graphviz xdot pkg-config python3 zlib1g-dev \
   help2man perl make curl python3-venv python3-pip autoconf
 ```

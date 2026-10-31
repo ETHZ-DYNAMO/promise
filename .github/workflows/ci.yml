@@ -25,7 +25,7 @@ jobs:
             build-essential git ninja-build cmake pkg-config \
             libeigen3-dev libboost-filesystem-dev libboost-graph-dev \
             libboost-json-dev libboost-program-options-dev \
-            bison flex libreadline-dev gawk tcl-dev libffi-dev zlib1g-dev \
+            bison flex libfl-dev libreadline-dev gawk tcl-dev libffi-dev zlib1g-dev \
             python3 help2man perl autoconf
 
       # rIC3 uses unstable Rust features.
