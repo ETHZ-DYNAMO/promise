@@ -46,8 +46,7 @@ This project can optionally use `rIC3`. Which requires a [rust
 compiler](https://www.rust-lang.org/tools/install). `rIC3` uses some unstable rust features. Therefore, we need to enable the nightly version:
 
 ```
-$ rustup install nightly
-$ rustup override set nightly
+$ rustup install nightly-2025-06-26
 ```
 
 ### Building the Project

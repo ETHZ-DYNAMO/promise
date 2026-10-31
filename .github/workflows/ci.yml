@@ -29,10 +29,8 @@ jobs:
             python3 help2man perl autoconf
 
       # rIC3 uses unstable Rust features.
-      - name: Install Rust nightly
-        run: |
-          rustup toolchain install nightly --profile minimal
-          rustup override set nightly
+      - name: Install Rust nightly (the version build.sh uses for rIC3)
+        run: rustup toolchain install nightly-2025-06-26 --profile minimal
 
       - name: Build
         run: bash build.sh

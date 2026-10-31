@@ -22,7 +22,9 @@ build_ric3() {
   mkdir -p "$EXT_DIR/rIC3"
   # Install rIC3 from crates. --locked: use the dependency versions from rIC3's
   # lockfile; newer versions of its dependencies don't compile with 1.4.1.
-  cargo install rIC3 --locked --force --version 1.4.1 --root $EXT_DIR/rIC3
+  # rIC3 uses unstable Rust features; later nightlies changed them, so its
+  # dependencies (logicrs) no longer compile with them.
+  cargo +nightly-2025-06-26 install rIC3 --locked --force --version 1.4.1 --root $EXT_DIR/rIC3
   exit_on_failure "rIC3 build failed"
 }
 

@@ -19,8 +19,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN rustc --version && cargo --version
 
 # rIC3 requires nightly version of the rust compiler:
-RUN rustup install nightly && \
-	rustup override set nightly
+RUN rustup install nightly-2025-06-26
 
 # We need boost >= 1.82:
 RUN cd /tmp && \
