@@ -102,14 +102,18 @@ void runSimulation(const std::filesystem::path &objDir,
   makeCmd << " -f V" << topName + ".mk";
   makeCmd << " V" << topName;
 
-  shell(makeCmd.str());
+  auto [makeCode, makeStdout] = shell(makeCmd.str());
+  if (makeCode != 0) {
+    std::cerr << "Error: failed to build the Verilator model.\n" << makeStdout;
+    throw std::runtime_error("Verilator model build failed");
+  }
 
   // Launch the binary:
   std::stringstream simCmd;
   simCmd << (objDir / ("V" + topName));
   {
     Timer t(RUNTIME_SIM);
-    shell(simCmd.str());
+    runSimulationBinary(simCmd.str());
   }
 }
 

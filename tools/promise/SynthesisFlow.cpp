@@ -353,7 +353,7 @@ Eigen::MatrixXi runRandomSimulation(
     // Launch the binary:
     std::stringstream simCmd;
     simCmd << (verilatorSimObjDir / ("V" + topName));
-    shell(simCmd.str());
+    runSimulationBinary(simCmd.str());
 
     Eigen::MatrixXi signalMatrix = vcdToSignalMatrix(m, vcdFile, signalList);
     simData.push_back(signalMatrix);
@@ -397,7 +397,7 @@ std::vector<Invariant> inferLinearInvariantsFromSimulation(
     // Launch the binary:
     std::stringstream simCmd;
     simCmd << (verilatorObjDir / ("V" + topName));
-    shell(simCmd.str());
+    runSimulationBinary(simCmd.str());
 
     // Retrieve the signal matrix from CEX
     auto cexMatrix = vcdToSignalMatrix(m, vcdFile, signalList);

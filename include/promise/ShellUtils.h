@@ -45,6 +45,11 @@ inline std::pair<int, std::string> shell(const std::string &cmd) {
 
   int returnCode = pclose(pipe);
   int exitCode = WEXITSTATUS(returnCode); // gets actual exit code
+  // A command killed by a signal (e.g., a crashed simulator) has no exit code:
+  // `sh -c` execs a single command, so the signal reaches `pclose` directly.
+  // Report it as a shell does (128 + signal number), so that it is nonzero.
+  if (WIFSIGNALED(returnCode))
+    exitCode = 128 + WTERMSIG(returnCode);
 
   return std::make_pair(exitCode, result);
 }

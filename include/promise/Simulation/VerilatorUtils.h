@@ -38,6 +38,14 @@ void buildVerilatorModel(const std::filesystem::path &objDir,
                          const std::filesystem::path &testbench,
                          const std::string &topName);
 
+/// \brief Run a simulation binary built by `buildVerilatorModel`.
+///
+/// Throws if the binary exits with a nonzero code (e.g., it crashed), since
+/// the trace it wrote is then empty or truncated.
+///
+/// \param simCmd: the command that launches the simulation binary
+void runSimulationBinary(const std::string &simCmd);
+
 /// \brief Run Verilator linting on the provided Verilog sources, it throws an
 /// runtime error if verilator fails.
 ///
