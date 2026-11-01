@@ -14,6 +14,11 @@
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
 
+// After the Yosys headers: ABC defines macros (e.g., `ARGS`) that clash with
+// names in Yosys's headers.
+#include "promise/AbcCommands.h"
+#include "promise/RTLIL/EquipInvariants.h"
+
 #include <gtest/gtest.h>
 
 #include <fstream>
@@ -161,6 +166,55 @@ TEST(EncodingOptimization, EncodesMutuallyExclusiveFFs) {
   EXPECT_EQ(countFFBits(module), 3);
 
   proveEquivalentToGold(design.get(), module);
+}
+
+/// Two FFs that toggle every cycle from the same initial value: they are
+/// sequentially equivalent, but not structurally (different D inputs), so
+/// Yosys keeps both.
+const std::string togglingFFsVerilog = R"(
+module tog(input clk, output o, output p);
+  (* keep *) reg a = 0;
+  (* keep *) reg a2 = 0;
+  always @(posedge clk) begin
+    a <= ~a;
+    a2 <= ~a2;
+  end
+  assign o = a;
+  assign p = a2;
+endmodule
+)";
+
+/// Promise's scorr with invariants must merge FFs that are in the cone of an
+/// invariant. Plain `scorr -c` drops every merge in the cones of the
+/// constraints; Promise uses `-m` (full merge) since its invariants are
+/// proven.
+TEST(ScorrWithInvariants, MergesEquivalentFFsInInvariantCone) {
+  auto design = synthesize(togglingFFsVerilog, "tog");
+  RTLIL::Module *module = design->module(RTLIL::escape_id("tog"));
+  ASSERT_EQ(countFFBits(module), 2);
+  run_pass("techmap; write_blif tog_gold.blif", design.get());
+
+  // Invariant: a == a2. Instrument it as Promise's flows do: as the last PO.
+  Invariant inv(mkAst(EqOp(var("a"), var("a2"))));
+  instrumentInvariants(module, {inv}, /*trimOriginalOutputs=*/false,
+                       /*separateInvariants=*/false);
+  unsigned numPOBits = 0;
+  for (auto *wire : module->wires())
+    if (wire->port_output)
+      numPOBits += wire->width;
+  run_pass("techmap; write_blif tog_invar.blif", design.get());
+
+  runAbcScorrOptimization("tog_invar.blif", "tog_scorr.blif",
+                          /*inductionDepth=*/10, /*withInvariants=*/true,
+                          numPOBits);
+  EXPECT_EQ(SynthResultLUT6(std::filesystem::path("tog_scorr.blif")).ffs, 1);
+
+  // dsec stores its verdict in the problem status: 1 means equivalent.
+  Abc_Start();
+  Abc_Frame_t *pAbc = Abc_FrameGetGlobalFrame();
+  runAbcCommand(pAbc, "dsec -T 60 tog_gold.blif tog_scorr.blif");
+  EXPECT_EQ(Abc_FrameReadProbStatus(pAbc), 1);
+  Abc_Stop();
 }
 
 } // namespace

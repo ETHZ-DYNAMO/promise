@@ -112,8 +112,12 @@ void runAbcScorrOptimization(const std::string &filename,
 
   std::stringstream cmd;
   cmd << "scorr";
+  // -m: also merge nodes in the cones of the constraints. Without it, scorr
+  // drops every equivalence there (e.g., FFs that the invariants read). This is
+  // sound because Promise's invariants are proven to hold in all reachable
+  // states.
   if (withInvariants)
-    cmd << " -c";
+    cmd << " -c -m";
   cmd << " -F " << inductionDepth;
   runAbcCommand(pAbc, cmd.str());
 
