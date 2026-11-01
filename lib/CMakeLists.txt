@@ -7,6 +7,7 @@ PRIVATE
   RTLIL/RTLILUtils.cpp
   RTLIL/EquipInvariants.cpp
   RTLIL/EncodingOptimization.cpp
+  RTLIL/ReplaceDependentFFs.cpp
 )
 
 add_subdirectory(Simulation)

@@ -8,6 +8,7 @@
 #include "promise/RTLIL/EncodingOptimization.h"
 #include "promise/RTLIL/EquipInvariants.h"
 #include "promise/RTLIL/RTLILUtils.h"
+#include "promise/RTLIL/ReplaceDependentFFs.h"
 
 #include "promise/Simulation/VcdParser.h"
 #include "promise/Simulation/VerilatorUtils.h"
@@ -276,7 +277,11 @@ void flowScorr(const SynthesisFlowConfig &config, RTLIL::Module *m,
 // Assuming that the conjunction of the invariants is proven, use scorr in ABC
 // with invariants to optimize the design
 void flowScorrInvar(const SynthesisFlowConfig &config, RTLIL::Module *m,
-                    const std::vector<Invariant> &invariants) {
+                    const std::vector<Invariant> &invariants,
+                    const std::string &tag = "") {
+  // Prefix of the output files and of the result label, e.g., "replace".
+  const std::string filePrefix = tag.empty() ? "" : tag + "_";
+  const std::string labelPrefix = tag.empty() ? "" : tag + " + ";
 
   RTLIL::Design *design = new RTLIL::Design;
 
@@ -290,14 +295,16 @@ void flowScorrInvar(const SynthesisFlowConfig &config, RTLIL::Module *m,
                        /* trimOriginalOutputs = */ false,
                        /* separateInvariants = */ false);
 
-  auto miterVerilog = config.getSynthResultDir() / "design_invariants.v";
+  auto miterVerilog =
+      config.getSynthResultDir() / (filePrefix + "design_invariants.v");
   run_pass("write_verilog " + miterVerilog.string(), design);
 
-  auto miterBlif = config.getSynthResultDir() / "design_invariants.blif";
+  auto miterBlif =
+      config.getSynthResultDir() / (filePrefix + "design_invariants.blif");
   run_pass("techmap; write_blif " + miterBlif.string(), design);
 
-  auto optimizedBlif =
-      config.getSynthResultDir() / "design_invariants_scorred.blif";
+  auto optimizedBlif = config.getSynthResultDir() /
+                       (filePrefix + "design_invariants_scorred.blif");
 
   unsigned numPOBits = 0;
   int maxPortId = -1;
@@ -316,8 +323,29 @@ void flowScorrInvar(const SynthesisFlowConfig &config, RTLIL::Module *m,
                           /* withInvariants */ true, numPOBits);
 
   auto result = SynthResultLUT6(optimizedBlif);
-  std::cerr << "[RESULT] after Scorr + Invar: ";
+  std::cerr << "[RESULT] after " << labelPrefix << "Scorr + Invar: ";
   result.logResult(std::cerr);
+}
+
+void flowReplaceDependentFFs(const SynthesisFlowConfig &config,
+                             RTLIL::Module *m,
+                             const std::vector<Invariant> &invariants) {
+  RTLIL::Design *design = new RTLIL::Design;
+  RTLIL::Module *cloned = m->clone();
+  design->add(cloned);
+
+  unsigned numRemovedFFBits = replaceDependentFFs(cloned, invariants);
+  // Removes the next-state logic of the removed FFs.
+  run_pass("opt_clean", design);
+  std::cerr << "[INFO] removed " << numRemovedFFBits << " dependent FF bits\n";
+
+  auto replacedBlif = config.getSynthResultDir() / "replace.blif";
+  run_pass("techmap; write_blif " + replacedBlif.string(), design);
+  std::cerr << "[RESULT] after Replace: ";
+  SynthResultLUT6(replacedBlif).logResult(std::cerr);
+
+  flowScorrInvar(config, cloned, invariants, "replace");
+  delete design;
 }
 
 void flowEncoding(const SynthesisFlowConfig &config, RTLIL::Module *m,
@@ -541,5 +569,6 @@ bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
 
   flowScorr(config, m, 10);
   flowScorrInvar(config, m, linearInvariants);
+  flowReplaceDependentFFs(config, m, linearInvariants);
   return true;
 }

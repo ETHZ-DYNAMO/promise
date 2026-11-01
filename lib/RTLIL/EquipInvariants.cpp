@@ -113,6 +113,12 @@ SigSpec instrumentSingleInvariant(RTLIL::Module *m, const Invariant &inv,
   return invLogicOutput;
 }
 
+RTLIL::SigSpec instantiateExpression(RTLIL::Module *m,
+                                     const std::shared_ptr<PropAst> &expr) {
+  InstantiateInvariantVisitor visitor{m};
+  return visitor.visit(expr).first;
+}
+
 void instrumentInvariants(RTLIL::Module *m,
                           const std::vector<Invariant> &invariants,
                           bool trimOriginalOutputs, bool separateInvariants) {
