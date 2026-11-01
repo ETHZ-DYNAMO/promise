@@ -98,7 +98,10 @@ void runSimulation(const std::filesystem::path &objDir,
 
   // Compile the CPP simulation model
   std::stringstream makeCmd;
-  makeCmd << "make -C " << objDir;
+  // OBJCACHE=: don't compile through ccache. Every model has the same file
+  // names, and ccache returned objects compiled for another model, so the
+  // files of one simulator disagreed on the struct layout and it crashed.
+  makeCmd << "make -C " << objDir << " OBJCACHE=";
   makeCmd << " -f V" << topName + ".mk";
   makeCmd << " V" << topName;
 
