@@ -570,5 +570,6 @@ bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
   flowScorr(config, m, 10);
   flowScorrInvar(config, m, linearInvariants);
   flowReplaceDependentFFs(config, m, linearInvariants);
+  flowEncoding(config, m, linearInvariants);
   return true;
 }

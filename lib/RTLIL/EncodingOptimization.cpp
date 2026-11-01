@@ -267,19 +267,17 @@ void mergeMutexFFsUsingInvariant(RTLIL::Module *module, const Invariant &inv) {
       continue;
     }
 
-    if (!ff->type.in("$_DFF_P_")) {
-      // There are two possible situations where this can happen:
-      // 1. If the flip_bits() preserves the IdString of a FF that would be
-      // removed, but got picked up by a later invariant. In this case, the wire
-      // must be driven by an NOT gate.
-      // 2. If the other encoding optimization optimizes away this FF: in that
-      // case, the wire must be driven by a reduce_or
-      if (!ff->type.in("$_NOT_", "$reduce_or")) {
-        std::cerr << "Error: unexpected cell type " << log_id(ff->type) << "\n";
-        throw std::runtime_error("Unexpected cell type, exiting");
-      }
+    // The wire is not an FF output, e.g.:
+    // 1. flip_bits() preserved the IdString of an FF that was removed, and a
+    // later invariant picked it up; the wire is driven by a NOT gate.
+    // 2. Another encoding optimization removed this FF; the wire is driven by
+    // a reduce_or.
+    // 3. The invariant is over combinational signals (e.g., the probes of the
+    // RV32 core).
+    // Skipping the wire is sound: a subset of mutually exclusive FFs is
+    // mutually exclusive.
+    if (!ff->type.in("$_DFF_P_"))
       continue;
-    }
 
     auto isNegated = visitor.isNegated[i];
 
@@ -290,12 +288,15 @@ void mergeMutexFFsUsingInvariant(RTLIL::Module *module, const Invariant &inv) {
     auto ffInitState = ffData.val_init.to_bits();
     assert(ffInitState.size() == 1 && "We assume that ffs are 1 bit");
 
+    // An FF without an initial value (e.g., without a reset, when the initial
+    // state is the post-reset state) is skipped: the encoding needs the
+    // initial state.
     if (ffInitState[0] == Yosys::RTLIL::S0) {
       originalInitialState.push_back(isNegated != 0);
     } else if (ffInitState[0] == Yosys::RTLIL::S1) {
       originalInitialState.push_back(isNegated != 1);
     } else {
-      assert(false && "We only work with ffs with initial values");
+      continue;
     }
 
     if (isNegated) {
