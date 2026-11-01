@@ -78,5 +78,11 @@ public:
 bool synthFlowSingleOutputReg(SynthesisFlowConfig config, RTLIL::Design *design,
                               const std::string &topName);
 
+/// \brief Synthesis flow with the signals marked with `(* promise *)`.
+///
+/// \param clockPort, resetPort: the top-level clock and active-high reset. The
+/// initial state of the design is the state after one reset cycle, not the
+/// power-on values in the Verilog (e.g., Bluespec's `'hAAAA...`).
 bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
-                     const std::string &topName);
+                     const std::string &topName, const std::string &clockPort,
+                     const std::string &resetPort);

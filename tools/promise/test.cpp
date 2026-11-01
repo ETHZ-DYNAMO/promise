@@ -71,7 +71,10 @@ int main(int argc, char *argv[]) {
 
   SynthesisFlowConfig config(3600, "output");
 
-  synthFlowManual(config, design, topName);
+  // Bluespec designs: clock `clk`, reset `rst` (active high with
+  // BSV_POSITIVE_RESET).
+  synthFlowManual(config, design, topName, /*clockPort=*/"clk",
+                  /*resetPort=*/"rst");
 
   delete design;
   yosys_shutdown();

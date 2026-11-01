@@ -491,12 +491,20 @@ bool synthFlowSingleOutputReg(SynthesisFlowConfig config, RTLIL::Design *design,
 
 // This is the "suggest" and "guarnatee" step
 bool synthFlowManual(SynthesisFlowConfig config, RTLIL::Design *design,
-                     const std::string &topName) {
+                     const std::string &topName, const std::string &clockPort,
+                     const std::string &resetPort) {
 
   RTLIL::Module *m = design->module(RTLIL::escape_id(topName));
 
   run_pass("synth -nofsm -flatten -top " + topName +
                "; dffunmap; check -assert",
+           design);
+
+  // Replace the init values by the state after one reset cycle (-w: write the
+  // final simulation state back as init values). FFs without a reset get an
+  // undefined value, i.e., a free initial state.
+  run_pass("sim -clock " + clockPort + " -reset " + resetPort +
+               " -rstlen 1 -n 1 -w",
            design);
 
   run_pass("clean", design);
