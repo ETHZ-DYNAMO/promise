@@ -1,5 +1,3 @@
-#include <base/abc/abc.h>
-#include <base/main/abcapis.h>
 #include <boost/graph/sequential_vertex_coloring.hpp>
 
 #include <cstddef>
@@ -23,6 +21,11 @@
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
+
+// ABC headers: after the Yosys headers, since ABC defines macros (e.g., `ARGS`
+// in misc/st/st.h) that clash with names in Yosys's constids.inc.
+#include <base/abc/abc.h>
+#include <base/main/abcapis.h>
 
 // Promise headers
 #include "SynthesisFlow.h"
